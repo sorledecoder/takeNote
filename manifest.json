@@ -10,21 +10,21 @@
   "lang": "en", 
   "icons": [ 
     { 
-      "src": "OIP-192.png", 
+      "src": "OIP-192.ico", 
       "sizes": "192x192", 
-      "type": "image/png", 
+      "type": "image/ico", 
       "purpose": "any maskable" 
     }, 
     { 
-      "src": "OIP-512.png", 
+      "src": "OIP-512.ico", 
       "sizes": "512x512", 
-      "type": "image/png", 
+      "type": "image/ico", 
       "purpose": "any maskable" 
     }, 
     { 
-      "src": "OIP.png", 
+      "src": "OIP.ico", 
       "sizes": "any", 
-      "type": "image/png", 
+      "type": "image/ico", 
       "purpose": "any" 
     } 
   ] 

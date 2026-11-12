@@ -5,6 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" /> 
   <title>Voice to Text App</title> 
   <link rel="stylesheet" href="style.css" /> 
+   <link rel="stylesheet" href="style.css" />
+     <!-- ========================================== 
+       FAVICON / BROWSER TAB ICON (OIP logo) 
+  ========================================== --> 
+  <link rel="icon" type="image/png" href="OIP.ico" /> 
+  <link rel="shortcut icon" type="image/png" href="OIP.ico" /> 
+ 
+  <!-- ========================================== 
+       APPLE TOUCH ICON (iPhone/iPad home screen) 
+  ========================================== --> 
+  <link rel="apple-touch-icon" href="OIP-192.ico" /> 
+ 
+
 </head> 
 <body> 
   <div class="container"> 
@@ -39,6 +52,15 @@
       <span id="charCount">Characters: 0</span> 
     </div> 
   </div> 
+   <!-- ========================================== 
+       PWA INSTALL BUTTON (shown by install.js) 
+  ========================================== --> 
+  <div id="install-container" style="display:none; text-align:center; margin: 10px;"> 
+    <button id="install-btn" class="install-button"> 
+      &#11015; Install App 
+    </button> 
+  </div> 
+
   <script src="app.js"></script> 
 </body> 
 </html> 
