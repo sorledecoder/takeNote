@@ -1,66 +1,116 @@
-<!DOCTYPE html> 
-<html lang="en"> 
-<head> 
-  <meta charset="UTF-8" /> 
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" /> 
-  <title>Voice to Text App</title> 
-  <link rel="stylesheet" href="style.css" /> 
-   <link rel="stylesheet" href="style.css" />
-     <!-- ========================================== 
-       FAVICON / BROWSER TAB ICON (OIP logo) 
-  ========================================== --> 
-  <link rel="icon" type="image/png" href="OIP.ico" /> 
-  <link rel="shortcut icon" type="image/png" href="OIP.ico" /> 
- 
-  <!-- ========================================== 
-       APPLE TOUCH ICON (iPhone/iPad home screen) 
-  ========================================== --> 
-  <link rel="apple-touch-icon" href="OIP-192.ico" /> 
- 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Voice to Text App</title>
 
-</head> 
-<body> 
-  <div class="container"> 
-    <h1>🎙️ Voice to Text</h1> 
-    <p class="subtitle">Speak naturally. Say <strong>"fullstop"</strong>, <strong>"comma"</strong>, or <strong>"new paragraph"</strong> for punctuation.</p> 
- 
-    <div class="controls"> 
-      <button id="startBtn" class="btn btn-start">▶ Start Recording</button> 
-      <button id="stopBtn" class="btn btn-stop" disabled>⏹ Stop Recording</button> 
-      <button id="clearBtn" class="btn btn-clear">🗑 Clear</button> 
-      <button id="copyBtn" class="btn btn-copy">📋 Copy Text</button> 
-      <button id="downloadBtn" class="btn btn-download">⬇ Download TXT</button> 
-    </div> 
- 
-    <div class="status-bar"> 
-      <span id="statusIndicator" class="status-dot idle"></span> 
-      <span id="statusText">Idle — Press Start to begin</span> 
-    </div> 
- 
-    <div class="transcript-box"> 
-      <label>Transcribed Text</label> 
-      <textarea id="transcript" rows="15" placeholder="Your transcribed text will appear here..."></textarea> 
-    </div> 
- 
-    <div class="interim-box"> 
-      <label>Live Preview</label> 
-      <div id="interim"></div> 
-    </div> 
- 
-    <div class="stats"> 
-      <span id="wordCount">Words: 0</span> 
-      <span id="charCount">Characters: 0</span> 
-    </div> 
-  </div> 
-   <!-- ========================================== 
-       PWA INSTALL BUTTON (shown by install.js) 
-  ========================================== --> 
-  <div id="install-container" style="display:none; text-align:center; margin: 10px;"> 
-    <button id="install-btn" class="install-button"> 
-      &#11015; Install App 
-    </button> 
-  </div> 
+  <!-- ==========================================
+       STYLESHEET (single link — duplicate removed)
+  ========================================== -->
+  <link rel="stylesheet" href="style.css" />
 
-  <script src="app.js"></script> 
-</body> 
-</html> 
+  <!-- ==========================================
+       FAVICON / BROWSER TAB ICON (OIP logo)
+  ========================================== -->
+  <link rel="icon" type="image/png" href="OIP.ico" />
+  <link rel="shortcut icon" type="image/png" href="OIP.ico" />
+
+  <!-- ==========================================
+       APPLE TOUCH ICON (iPhone/iPad home screen)
+  ========================================== -->
+  <link rel="apple-touch-icon" href="OIP-192.ico" />
+
+  <!-- ==========================================
+       PWA MANIFEST (required for install prompt)
+  ========================================== -->
+  <link rel="manifest" href="manifest.json" />
+
+  <!-- ==========================================
+       PWA META TAGS
+  ========================================== -->
+  <meta name="theme-color" content="#1a1a2e" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="VoiceToText" />
+
+</head>
+<body>
+
+  <div class="container">
+
+    <h1>🎙️ Voice to Text</h1>
+
+    <p class="subtitle">
+      Speak naturally. Say <strong>"fullstop"</strong>, 
+      <strong>"comma"</strong>, or 
+      <strong>"new paragraph"</strong> for punctuation.
+    </p>
+
+    <!-- ==========================================
+         CONTROL BUTTONS
+    ========================================== -->
+    <div class="controls">
+      <button id="startBtn"    class="btn btn-start">▶ Start Recording</button>
+      <button id="stopBtn"     class="btn btn-stop"     disabled>⏹ Stop Recording</button>
+      <button id="clearBtn"    class="btn btn-clear">🗑 Clear</button>
+      <button id="copyBtn"     class="btn btn-copy">📋 Copy Text</button>
+      <button id="downloadBtn" class="btn btn-download">⬇ Download TXT</button>
+    </div>
+
+    <!-- ==========================================
+         STATUS BAR
+    ========================================== -->
+    <div class="status-bar">
+      <span id="statusIndicator" class="status-dot idle"></span>
+      <span id="statusText">Idle — Press Start to begin</span>
+    </div>
+
+    <!-- ==========================================
+         MAIN TRANSCRIPT OUTPUT
+    ========================================== -->
+    <div class="transcript-box">
+      <label>Transcribed Text</label>
+      <textarea 
+        id="transcript" 
+        rows="15" 
+        placeholder="Your transcribed text will appear here...">
+      </textarea>
+    </div>
+
+    <!-- ==========================================
+         LIVE INTERIM PREVIEW (real-time words)
+         ✅ Already existed — no change needed here
+    ========================================== -->
+    <div class="interim-box">
+      <label>Live Preview</label>
+      <div id="interim"></div>
+    </div>
+
+    <!-- ==========================================
+         WORD & CHARACTER COUNTER
+    ========================================== -->
+    <div class="stats">
+      <span id="wordCount">Words: 0</span>
+      <span id="charCount">Characters: 0</span>
+    </div>
+
+  </div><!-- end .container -->
+
+  <!-- ==========================================
+       PWA INSTALL BUTTON (shown by install.js)
+  ========================================== -->
+  <div id="install-container" style="display:none; text-align:center; margin:10px;">
+    <button id="install-btn" class="install-button">
+      &#11015; Install App
+    </button>
+  </div>
+
+  <!-- ==========================================
+       SCRIPTS (app logic + PWA install)
+  ========================================== -->
+  <script src="app.js"></script>
+  <script src="install.js"></script>
+
+</body>
+</html>
