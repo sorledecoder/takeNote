@@ -13,9 +13,9 @@ const FILES_TO_CACHE = [
   './app.js', 
   './install.js', 
   './manifest.json', 
-  './OIP.ico', 
-  './OIP-192.ico', 
-  './OIP-512.ico' 
+  './OIP.png', 
+  './OIP-192.png', 
+  './OIP-512.png' 
 ]; 
  
 // ---- INSTALL: Cache all app files ---- 
