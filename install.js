@@ -1,138 +1,46 @@
-// ============================================================ 
-// install.js — PWA Install Logic with OIP Logo 
-// Voice-to-Text App 
-// Author: Goodluck Akeekue 
-// ============================================================ 
+// install.js — handles PWA install prompt + registers service worker 
  
-'use strict'; 
- 
-// ---- Store the browser's install prompt event ---- 
-let deferredInstallPrompt = null; 
+let deferredPrompt = null; 
  
 const installContainer = document.getElementById('install-container'); 
-const installBtn       = document.getElementById('install-btn'); 
+const installBtn = document.getElementById('install-btn'); 
  
-// ============================================================ 
-// 1. CAPTURE THE BROWSER'S BEFOREINSTALLPROMPT EVENT 
-//    This fires when the browser detects the app is installable. 
-// ============================================================ 
-window.addEventListener('beforeinstallprompt', (event) => { 
-  // Prevent the default mini-infobar from appearing on mobile 
-  event.preventDefault(); 
+// Register service worker for offline caching 
+if ('serviceWorker' in navigator) { 
+  window.addEventListener('load', async () => { 
+    try { 
+      await navigator.serviceWorker.register('./sw.js'); 
+    } catch (e) { 
+      // SW registration can fail on file:// or unsupported contexts 
+      console.warn('Service worker registration failed:', e); 
+    } 
+  }); 
+} 
  
-  // Save the event so we can trigger it later 
-  deferredInstallPrompt = event; 
- 
-  // Show the custom install button 
-  if (installContainer) { 
-    installContainer.style.display = 'block'; 
-  } 
- 
-  console.log('[PWA] Install prompt captured. Install button shown.'); 
+// Capture the install prompt event 
+window.addEventListener('beforeinstallprompt', (e) => { 
+  e.preventDefault(); 
+  deferredPrompt = e; 
+  if (installContainer) installContainer.style.display = 'block'; 
 }); 
  
-// ============================================================ 
-// 2. HANDLE INSTALL BUTTON CLICK 
-//    Shows the native browser install dialog. 
-// ============================================================ 
+// Handle install button click 
 if (installBtn) { 
   installBtn.addEventListener('click', async () => { 
-    if (!deferredInstallPrompt) { 
-      console.warn('[PWA] No install prompt available.'); 
-      return; 
-    } 
+    if (!deferredPrompt) return; 
+    deferredPrompt.prompt(); 
  
-    // Show the install dialog 
-    deferredInstallPrompt.prompt(); 
+    const choice = await deferredPrompt.userChoice; 
+    deferredPrompt = null; 
  
-    // Wait for the user to respond 
-    const { outcome } = await deferredInstallPrompt.userChoice; 
- 
-    if (outcome === 'accepted') { 
-      console.log('[PWA] User accepted the install prompt.'); 
-      showInstallSuccess(); 
-    } else { 
-      console.log('[PWA] User dismissed the install prompt.'); 
-    } 
- 
-    // Reset — prompt can only be used once 
-    deferredInstallPrompt = null; 
- 
-    // Hide the install button after use 
-    if (installContainer) { 
-      installContainer.style.display = 'none'; 
-    } 
+    // Hide install UI after user interaction 
+    if (installContainer) installContainer.style.display = 'none'; 
+    console.log('Install choice:', choice); 
   }); 
 } 
  
-// ============================================================ 
-// 3. DETECT IF APP IS ALREADY INSTALLED 
-//    Hides install button if app is running as standalone. 
-// ============================================================ 
-if (window.matchMedia('(display-mode: standalone)').matches || 
-    window.navigator.standalone === true) { 
-  console.log('[PWA] Running as installed app (standalone mode).'); 
-  if (installContainer) { 
-    installContainer.style.display = 'none'; 
-  } 
-} 
- 
-// ============================================================ 
-// 4. LISTEN FOR SUCCESSFUL APP INSTALLATION 
-// ============================================================ 
+// If already installed, hide install UI 
 window.addEventListener('appinstalled', () => { 
-  console.log('[PWA] App installed successfully with OIP logo!'); 
-  deferredInstallPrompt = null; 
-  if (installContainer) { 
-    installContainer.style.display = 'none'; 
-  } 
-  showInstallSuccess(); 
-}); 
- 
-// ============================================================ 
-// 5. REGISTER SERVICE WORKER 
-//    Required for PWA install + offline support. 
-// ============================================================ 
-if ('serviceWorker' in navigator) { 
-  window.addEventListener('load', () => { 
-    navigator.serviceWorker 
-      .register('./sw.js') 
-      .then((registration) => { 
-        console.log('[PWA] Service Worker registered:', registration.scope); 
-      }) 
-      .catch((error) => { 
-        console.error('[PWA] Service Worker registration failed:', error); 
-      }); 
-  }); 
-} 
- 
-// ============================================================ 
-// 6. SHOW INSTALL SUCCESS TOAST NOTIFICATION 
-// ============================================================ 
-function showInstallSuccess() { 
-  const toast = document.createElement('div'); 
-  toast.textContent = '✅ Voice-to-Text App installed successfully!'; 
-  toast.style.cssText = ` 
-    position: fixed; 
-    bottom: 30px; 
-    left: 50%; 
-    transform: translateX(-50%); 
-    background: #28a745; 
-    color: white; 
-    padding: 12px 24px; 
-    border-radius: 8px; 
-    font-size: 14px; 
-    font-weight: bold; 
-    z-index: 9999; 
-    box-shadow: 0 4px 12px rgba(0,0,0,0.3); 
-    animation: fadeIn 0.4s ease; 
-  `; 
-  document.body.appendChild(toast); 
- 
-  // Auto-remove after 4 seconds 
-  setTimeout(() => { 
-    toast.style.opacity = '0'; 
-    toast.style.transition = 'opacity 0.5s ease'; 
-    setTimeout(() => toast.remove(), 500); 
-  }, 4000); 
-} 
+  deferredPrompt = null; 
+  if (installContainer) installContainer.style.display = 'none'; 
+});
