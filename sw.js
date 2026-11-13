@@ -1,37 +1,37 @@
-// sw.js — simple offline cache 
- 
-const CACHE_NAME = 'voice-to-text-cache-v1'; 
-const ASSETS = [ 
-  './', 
-  './index.html', 
-  './style.css', 
-  './app.js', 
-  './install.js', 
-  './manifest.json', 
-  './OIP.ico', 
-  './icon-192.png', 
-  './icon-512.png' 
-]; 
- 
-self.addEventListener('install', (event) => { 
-  event.waitUntil( 
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS)) 
-  ); 
-}); 
- 
-self.addEventListener('activate', (event) => { 
-  event.waitUntil( 
-    caches.keys().then((keys) => 
-      Promise.all(keys.map((k) => (k !== CACHE_NAME ? caches.delete(k) : null))) 
-    ) 
-  ); 
-}); 
- 
-self.addEventListener('fetch', (event) => { 
-  event.respondWith( 
-    caches.match(event.request).then((cached) => { 
-      return cached || fetch(event.request); 
-    }) 
-  ); 
-}); 
- 
+const CACHE = "voice-to-text-v1";
+const ASSETS = [
+  "./",
+  "./index.html",
+  "./style.css",
+  "./app.js",
+  "./install.js",
+  "./manifest.json",
+  "./OIP.ico",
+  "./OIP-192.ico",
+];
+
+self.addEventListener("install", (e) => {
+  e.waitUntil(
+    caches.open(CACHE).then((c) =>
+      // Cache each asset individually so one missing file (e.g. if the
+      // icons haven't been added yet) doesn't block the whole install.
+      Promise.all(ASSETS.map((url) => c.add(url).catch(() => null)))
+    )
+  );
+  self.skipWaiting();
+});
+
+self.addEventListener("activate", (e) => {
+  e.waitUntil(
+    caches.keys().then((keys) =>
+      Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))
+    )
+  );
+  self.clients.claim();
+});
+
+self.addEventListener("fetch", (e) => {
+  e.respondWith(
+    caches.match(e.request).then((cached) => cached || fetch(e.request))
+  );
+});

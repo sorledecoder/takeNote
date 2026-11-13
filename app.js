@@ -1,231 +1,271 @@
-// app.js — Voice-to-Text engine (Web Speech API) 
-// Goals: 
-// - No repeated words (separate final vs interim; use event.resultIndex) 
-// - Translate on the go (show interim live) 
-// - Long running (continuous + robust auto-restart) 
-// - If interruption/silence: show "paused" state, but keep session alive 
- 
-const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition; 
- 
-// DOM 
-const startBtn = document.getElementById('startBtn'); 
-const stopBtn = document.getElementById('stopBtn'); 
-const clearBtn = document.getElementById('clearBtn'); 
-const copyBtn = document.getElementById('copyBtn'); 
-const downloadBtn = document.getElementById('downloadBtn'); 
-const transcriptEl = document.getElementById('transcript'); 
-const interimEl = document.getElementById('interim'); 
-const statusDot = document.getElementById('statusIndicator'); 
-const statusText = document.getElementById('statusText'); 
-const wordCountEl = document.getElementById('wordCount'); 
-const charCountEl = document.getElementById('charCount'); 
- 
-if (!SpeechRecognition) { 
-  alert('Speech Recognition is not supported in this browser. Use Chrome or Edge.'); 
-} 
- 
-let recognition = null; 
-let isRecording = false; 
-let finalText = ''; 
-let interimText = ''; 
-let restartTimer = null; 
-let pausedTimer = null; 
-let lastSpeechAt = 0; 
- 
-// If the engine ends unexpectedly while recording, we restart. 
-// To avoid tight loops, use small delays. 
-const RESTART_DELAY_MS = 300; 
-const SILENCE_PAUSE_MS = 2500; // after this much silence, show "paused" 
- 
-// Spoken punctuation commands 
-const PUNCT = [ 
-  { re: /\b(full stop|fullstop|period)\b/gi, rep: '. ' }, 
-  { re: /\bcomma\b/gi, rep: ', ' }, 
-  { re: /\b(new paragraph|new para)\b/gi, rep: '\n\n' }, 
-  { re: /\bnew line\b/gi, rep: '\n' }, 
-]; 
- 
-function applyPunctuation(s) { 
-  let out = s; 
-  for (const p of PUNCT) out = out.replace(p.re, p.rep); 
-  // tidy spacing 
-  out = out.replace(/\s+\n/g, '\n').replace(/\n\s+/g, '\n'); 
-  out = out.replace(/\s{2,}/g, ' '); 
-  return out; 
-} 
- 
-function setStatus(text, state) { 
-  statusText.textContent = text; 
-  statusDot.className = 'status-dot ' + (state || 'idle'); 
-} 
- 
-function render() { 
-  transcriptEl.value = finalText.trimStart(); 
-  interimEl.textContent = interimText; 
- 
-  const combined = (finalText + ' ' + interimText).trim(); 
-  const words = combined ? combined.split(/\s+/).length : 0; 
-  wordCountEl.textContent = `Words: ${words}`; 
-  charCountEl.textContent = `Characters: ${combined.length}`; 
-} 
- 
-function schedulePausedIfSilent() { 
-  clearTimeout(pausedTimer); 
-  pausedTimer = setTimeout(() => { 
-    if (!isRecording) return; 
-    // If we haven't seen speech recently, show paused (but DO NOT stop) 
-    const silentFor = Date.now() - lastSpeechAt; 
-    if (silentFor >= SILENCE_PAUSE_MS) { 
-      setStatus('Paused — waiting for speech…', 'paused'); 
-    } 
-  }, SILENCE_PAUSE_MS); 
-} 
- 
-function buildRecognition() { 
-  const r = new SpeechRecognition(); 
-  r.lang = 'en-US'; 
-  r.continuous = true; 
-  r.interimResults = true; 
-  r.maxAlternatives = 1; 
- 
-  r.onstart = () => { 
-    setStatus('Recording… Speak now', 'active'); 
-  }; 
- 
-  r.onresult = (event) => { 
-    interimText = ''; 
- 
-    // Only iterate new results to avoid duplicates 
-    for (let i = event.resultIndex; i < event.results.length; i++) { 
-      const res = event.results[i]; 
-      const t = res[0].transcript; 
- 
-      if (res.isFinal) { 
-        const cleaned = applyPunctuation(t); 
-        finalText += cleaned + ' '; 
-      } else { 
-        interimText += t; 
-      } 
-    } 
- 
-    lastSpeechAt = Date.now(); 
-    setStatus('Recording…', 'active'); 
-    schedulePausedIfSilent(); 
-    render(); 
-  }; 
- 
-  r.onerror = (e) => { 
-    // Common benign errors: no-speech, aborted 
-    // We do not stop; we keep session alive and rely on onend restart. 
-    if (e.error === 'not-allowed' || e.error === 'service-not-allowed') { 
-      setStatus('Microphone permission denied', 'error'); 
-      stopRecording(); 
-      return; 
-    } 
- 
-    if (e.error === 'audio-capture') { 
-      setStatus('No microphone detected', 'error'); 
-      stopRecording(); 
-      return; 
-    } 
- 
-    // For network/no-speech/aborted, show paused, then allow restart 
-    setStatus('Paused — waiting for speech…', 'paused'); 
-  }; 
- 
-  r.onend = () => { 
-    // Chrome may end after pauses; keep alive if user still wants recording 
-    if (!isRecording) return; 
- 
-    clearTimeout(restartTimer); 
-    restartTimer = setTimeout(() => { 
-      try { 
-        r.start(); 
-      } catch (err) { 
-        // If start() throws because it’s already started, ignore. 
-      } 
-    }, RESTART_DELAY_MS); 
-  }; 
- 
-  return r; 
-} 
- 
-function startRecording() { 
-  if (!SpeechRecognition) return; 
-  if (isRecording) return; 
- 
-  isRecording = true; 
-  lastSpeechAt = Date.now(); 
-  schedulePausedIfSilent(); 
- 
-  recognition = buildRecognition(); 
-  try { 
-    recognition.start(); 
-  } catch (e) { 
-    isRecording = false; 
-    setStatus('Could not start recognition', 'error'); 
-    return; 
-  } 
- 
-  startBtn.disabled = true; 
-  stopBtn.disabled = false; 
-} 
- 
-function stopRecording() { 
-  isRecording = false; 
-  clearTimeout(restartTimer); 
-  clearTimeout(pausedTimer); 
- 
-  startBtn.disabled = false; 
-  stopBtn.disabled = true; 
- 
-  interimText = ''; 
-  render(); 
- 
-  try { 
-    recognition && recognition.stop(); 
-  } catch (_) {} 
- 
-  setStatus('Stopped', 'idle'); 
-} 
- 
-function clearAll() { 
-  finalText = ''; 
-  interimText = ''; 
-  render(); 
-} 
- 
-async function copyText() { 
-  const text = finalText.trim(); 
-  if (!text) return; 
-  try { 
-    await navigator.clipboard.writeText(text); 
-    setStatus('Copied to clipboard', 'active'); 
-    setTimeout(() => setStatus(isRecording ? 'Recording…' : 'Idle — Press Start to begin', isRecording ? 'active' : 'idle'), 1200); 
-  } catch (e) { 
-    alert('Copy failed.'); 
-  } 
-} 
- 
-function downloadText() { 
-  const text = finalText.trim(); 
-  if (!text) return; 
-  const stamp = new Date().toISOString().replace(/[:.]/g, '-'); 
-  const blob = new Blob([text], { type: 'text/plain' }); 
-  const url = URL.createObjectURL(blob); 
-  const a = document.createElement('a'); 
-  a.href = url; 
-  a.download = `transcript-${stamp}.txt`; 
-  a.click(); 
-  URL.revokeObjectURL(url); 
-} 
- 
-startBtn.addEventListener('click', startRecording); 
-stopBtn.addEventListener('click', stopRecording); 
-clearBtn.addEventListener('click', clearAll); 
-copyBtn.addEventListener('click', copyText); 
-downloadBtn.addEventListener('click', downloadText); 
- 
-// Initial render 
-render(); 
- 
+// ============================================================
+// app.js — Voice-to-Text Engine v2.1
+// Fixes applied: wrong element IDs (output/statusDot vs the
+// actual transcript/statusIndicator IDs in index.html), textarea
+// needs .value not .innerText, word/char counters were wiping
+// their own labels.
+// ============================================================
+
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+if (!SpeechRecognition) {
+  alert('❌ Your browser does not support Speech Recognition.\nPlease use Google Chrome or Microsoft Edge.');
+}
+
+// ── State Variables ──────────────────────────────────────────
+let recognition;
+let isRecording       = false;
+let finalTranscript   = '';   // Confirmed words only
+let interimTranscript = '';   // Live preview (not yet confirmed)
+let restartTimer      = null;
+let silenceTimer      = null;
+let errorCount        = 0;
+const MAX_ERRORS      = 5;
+
+// ── DOM Elements ─────────────────────────────────────────────
+const startBtn       = document.getElementById('startBtn');
+const stopBtn        = document.getElementById('stopBtn');
+const clearBtn       = document.getElementById('clearBtn');
+const copyBtn        = document.getElementById('copyBtn');
+const downloadBtn    = document.getElementById('downloadBtn');
+const outputDiv      = document.getElementById('transcript');     // was 'output' — matches index.html's textarea id
+const interimDiv     = document.getElementById('interim');
+const statusDot      = document.getElementById('statusIndicator'); // was 'statusDot' — matches index.html
+const statusText     = document.getElementById('statusText');
+const wordCount      = document.getElementById('wordCount');
+const charCount      = document.getElementById('charCount');
+
+// ── Punctuation Map ──────────────────────────────────────────
+const PUNCTUATION_MAP = [
+  { pattern: /\b(full stop|fullstop|period)\b/gi,       replace: '. '  },
+  { pattern: /\bcomma\b/gi,                              replace: ', '  },
+  { pattern: /\b(question mark)\b/gi,                   replace: '? '  },
+  { pattern: /\b(exclamation mark|exclamation point)\b/gi, replace: '! ' },
+  { pattern: /\bcolon\b/gi,                              replace: ': '  },
+  { pattern: /\bsemicolon\b/gi,                         replace: '; '  },
+  { pattern: /\b(new paragraph|new para)\b/gi,          replace: '\n\n' },
+  { pattern: /\bnew line\b/gi,                          replace: '\n'   },
+  { pattern: /\bdash\b/gi,                              replace: ' — '  },
+  { pattern: /\bhyphen\b/gi,                            replace: '-'    },
+  { pattern: /\bopen bracket\b/gi,                      replace: '('    },
+  { pattern: /\bclose bracket\b/gi,                     replace: ')'    },
+  { pattern: /\bopen quote\b/gi,                        replace: '\u201C' },
+  { pattern: /\bclose quote\b/gi,                       replace: '\u201D' },
+];
+
+function applyPunctuation(text) {
+  PUNCTUATION_MAP.forEach(({ pattern, replace }) => {
+    text = text.replace(pattern, replace);
+  });
+  // Capitalise first letter after sentence-ending punctuation
+  text = text.replace(/([.!?]\s+)([a-z])/g, (m, p1, p2) => p1 + p2.toUpperCase());
+  return text;
+}
+
+// ── Build Recognition Instance ───────────────────────────────
+function buildRecognition() {
+  const rec            = new SpeechRecognition();
+  rec.lang             = 'en-US';
+  rec.continuous       = true;   // never stop on its own
+  rec.interimResults   = true;   // real-time word display
+  rec.maxAlternatives  = 1;
+
+  // ── onresult: core fix for word repetition ────────────────
+  rec.onresult = (event) => {
+    interimTranscript = '';
+
+    // Only iterate NEW results (from event.resultIndex onward)
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const transcript = event.results[i][0].transcript;
+
+      if (event.results[i].isFinal) {
+        finalTranscript += applyPunctuation(transcript) + ' ';
+      } else {
+        interimTranscript += transcript;
+      }
+    }
+
+    renderOutput();
+    resetSilenceTimer();
+  };
+
+  // ── onend: auto-restart so it never hangs ────────────────
+  rec.onend = () => {
+    if (isRecording) {
+      restartTimer = setTimeout(() => {
+        try {
+          rec.start();
+        } catch (e) {
+          console.warn('Restart skipped:', e.message);
+        }
+      }, 300);
+    }
+  };
+
+  // ── onerror: handle & recover from errors ────────────────
+  rec.onerror = (event) => {
+    console.error('Speech error:', event.error);
+    errorCount++;
+
+    if (event.error === 'no-speech') {
+      // Normal — microphone heard silence; auto-restart handles it
+      return;
+    }
+
+    if (event.error === 'audio-capture') {
+      setStatus('⚠️ Microphone not found', 'error');
+      stopRecording();
+      return;
+    }
+
+    if (event.error === 'not-allowed') {
+      setStatus('🚫 Microphone access denied', 'error');
+      stopRecording();
+      return;
+    }
+
+    if (errorCount >= MAX_ERRORS) {
+      setStatus('❌ Too many errors — restarting…', 'error');
+      errorCount = 0;
+      restartRecognition();
+      return;
+    }
+  };
+
+  rec.onstart = () => {
+    setStatus('🔴 Recording… Speak now', 'active');
+    errorCount = 0;
+  };
+
+  return rec;
+}
+
+// ── Render Output ────────────────────────────────────────────
+function renderOutput() {
+  // Final confirmed text — a <textarea> needs .value, not .innerText
+  if (outputDiv) outputDiv.value = finalTranscript;
+
+  // Live interim preview (shown in lighter colour via CSS)
+  if (interimDiv) {
+    interimDiv.innerText = interimTranscript;
+  }
+
+  // Update counters — keep the "Words:" / "Characters:" labels
+  const combined = finalTranscript + interimTranscript;
+  const words    = combined.trim() === '' ? 0 : combined.trim().split(/\s+/).length;
+  if (wordCount) wordCount.innerText = `Words: ${words}`;
+  if (charCount) charCount.innerText = `Characters: ${combined.length}`;
+}
+
+// ── Silence Timer: auto-pause after 30s of silence ──────────
+function resetSilenceTimer() {
+  clearTimeout(silenceTimer);
+  silenceTimer = setTimeout(() => {
+    if (isRecording) {
+      setStatus('⏸️ Paused — waiting for speech…', 'paused');
+    }
+  }, 30000);
+}
+
+// ── Start Recording ──────────────────────────────────────────
+function startRecording() {
+  if (isRecording) return;
+  isRecording      = true;
+  interimTranscript = '';
+  errorCount       = 0;
+
+  recognition = buildRecognition();
+
+  try {
+    recognition.start();
+    startBtn.disabled = true;
+    stopBtn.disabled  = false;
+    setStatus('🔴 Recording… Speak now', 'active');
+  } catch (e) {
+    console.error('Start failed:', e);
+    setStatus('❌ Could not start microphone', 'error');
+    isRecording = false;
+  }
+}
+
+// ── Stop Recording ───────────────────────────────────────────
+function stopRecording() {
+  isRecording = false;
+  clearTimeout(restartTimer);
+  clearTimeout(silenceTimer);
+
+  try {
+    recognition.stop();
+  } catch (e) {
+    console.warn('Stop error:', e.message);
+  }
+
+  interimTranscript = '';
+  if (interimDiv) interimDiv.innerText = '';
+
+  startBtn.disabled = false;
+  stopBtn.disabled  = true;
+  setStatus('⏹️ Stopped', 'idle');
+}
+
+// ── Force Restart ────────────────────────────────────────────
+function restartRecognition() {
+  try { recognition.stop(); } catch (e) {}
+  setTimeout(() => {
+    if (isRecording) {
+      recognition = buildRecognition();
+      try { recognition.start(); } catch (e) {}
+    }
+  }, 500);
+}
+
+// ── Status Display ───────────────────────────────────────────
+function setStatus(message, state) {
+  if (statusText) statusText.innerText = message;
+  if (statusDot) {
+    statusDot.className = 'status-dot';
+    statusDot.classList.add(state); // CSS handles colour
+  }
+}
+
+// ── Clear Text ───────────────────────────────────────────────
+function clearText() {
+  finalTranscript   = '';
+  interimTranscript = '';
+  if (outputDiv)  outputDiv.value      = '';
+  if (interimDiv) interimDiv.innerText = '';
+  if (wordCount)  wordCount.innerText  = 'Words: 0';
+  if (charCount)  charCount.innerText  = 'Characters: 0';
+}
+
+// ── Copy to Clipboard ────────────────────────────────────────
+async function copyText() {
+  if (!finalTranscript.trim()) return;
+  try {
+    await navigator.clipboard.writeText(finalTranscript);
+    copyBtn.innerText = '✅ Copied!';
+    setTimeout(() => { copyBtn.innerText = '📋 Copy Text'; }, 2000);
+  } catch (e) {
+    alert('Copy failed. Please select and copy manually.');
+  }
+}
+
+// ── Download as .txt ─────────────────────────────────────────
+function downloadText() {
+  if (!finalTranscript.trim()) return;
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const blob      = new Blob([finalTranscript], { type: 'text/plain' });
+  const url       = URL.createObjectURL(blob);
+  const a         = document.createElement('a');
+  a.href          = url;
+  a.download      = `voice-transcript-${timestamp}.txt`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ── Button Event Listeners ───────────────────────────────────
+if (startBtn)    startBtn.addEventListener('click', startRecording);
+if (stopBtn)     stopBtn.addEventListener('click', stopRecording);
+if (clearBtn)    clearBtn.addEventListener('click', clearText);
+if (copyBtn)     copyBtn.addEventListener('click', copyText);
+if (downloadBtn) downloadBtn.addEventListener('click', downloadText);
